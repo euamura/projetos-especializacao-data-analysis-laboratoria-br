@@ -55,6 +55,8 @@ Segmentar a base de clientes em grupos com comportamentos distintos, permitindo 
 ```
 segmentacao-mercado-rfm/
 ├── README.md
+├── dashboard-analise-rfm.xlsx
+├── dashboard-analise-rfm.csv
 ├── apresentacao/
 │   └── Laboratoria-projeto-1-segmentacao.pptx
 └── data/
