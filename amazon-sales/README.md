@@ -63,29 +63,91 @@ Elaborar uma análise abrangente para orientar decisões estratégicas dos diret
 
 ### 1. Processar e preparar a base de dados
 
-Duas tabelas foram importadas no BigQuery: `amazon_product` e `amazon_review`.
-
-- **1.1** Importação dos dados no BigQuery
-- **1.2** Identificação e tratamento de valores nulos — `about_product` (4 nulos), `img_link` e `product_link` (466 cada), `rating_count` (2, removidos por serem variável-chave)
-- **1.3** Remoção de duplicatas via `ROW_NUMBER() OVER (PARTITION BY)`
-- **1.4** Gestão de dados fora do escopo — seleção das colunas relevantes à análise
-
-**Escopo de colunas selecionadas:**
-
-![Escopo de variáveis — produto](https://github.com/user-attachments/assets/8b17b9bd-7cfe-4176-988c-c8f5235da231)
-![Escopo de variáveis — review](https://github.com/user-attachments/assets/ac30a25f-4725-4a4d-93a3-3e92d4f8c31a)
-
-- **1.5** Tratamento de dados discrepantes em variáveis categóricas — remoção de registro com `rating = '|'` e normalização de texto em `review_title` e `review_content`
-
-![Dado discrepante em rating](https://github.com/user-attachments/assets/346a84b8-362a-42a7-9776-cda48be93345)
-![Dados de review com emojis e formatos variados](https://github.com/user-attachments/assets/a5cbc818-00c6-48ab-a345-31b01779a475)
-
-- **1.6** Verificação de dados discrepantes em variáveis numéricas — sem outliers a tratar
-- **1.7** Conversão do tipo de `rating` de `STRING` para `FLOAT64`
-- **1.8** Criação de novas variáveis: `main_category` e `sub_category` a partir do split da coluna `category`
-- **1.9** União das tabelas `amazon_product_clean` e `amazon_review_clean` via `LEFT JOIN` em `product_id`
+Duas tabelas foram importadas no BigQuery dentro do dataset `amazon_sales`: `amazon_product` e `amazon_review`.
 
 > Todas as queries estão documentadas em [`queries.sql`](./queries.sql).
+
+---
+
+**1.1 Importação**
+
+Projeto no BigQuery: `amazon-sales-lab-proj4` | Dataset: `amazon_sales` | Tabelas: `amazon_product`, `amazon_review`.
+
+---
+
+**1.2 Valores nulos**
+
+**amazon_product**
+
+| Coluna | Nulos |
+|---|---|
+| product_id | 0 |
+| product_name | 0 |
+| category | 0 |
+| discounted_price | 0 |
+| actual_price | 0 |
+| discount_percentage | 0 |
+| about_product | **4** |
+
+**amazon_review**
+
+| Coluna | Nulos |
+|---|---|
+| user_id | 0 |
+| user_name | 0 |
+| review_id | 0 |
+| review_title | 0 |
+| review_content | 0 |
+| img_link | **466** |
+| product_link | **466** |
+| product_id | 0 |
+| rating | 0 |
+| rating_count | **2** |
+
+A variável `rating_count` é chave para a análise — as 2 linhas com nulo foram removidas.
+
+---
+
+**1.3 Duplicatas**
+
+Removidas via `ROW_NUMBER() OVER (PARTITION BY)` em ambas as tabelas.
+
+---
+
+**1.4 Dados fora do escopo**
+
+Colunas avaliadas por relevância analítica. Mantidas: `product_id`, `category`, `discounted_price`, `actual_price`, `discount_percentage`, `rating`, `rating_count`. Descartadas colunas sem objetivo claro para o escopo (ex.: `img_link`, `product_link`, `about_product`).
+
+---
+
+**1.5 Discrepâncias em variáveis categóricas**
+
+- Coluna `rating`: encontrado valor discrepante `"|"` em um registro com `rating_count = 992` — registro removido como exceção
+- Colunas `review_title` e `review_content`: presença de emojis e formatos variados; tratamento de normalização de texto
+
+---
+
+**1.6 Discrepâncias em variáveis numéricas**
+
+Nenhum outlier identificado que justificasse remoção. Por se tratar de múltiplos varejos autônomos, a variação de preços e descontos foi mantida como característica natural da base.
+
+---
+
+**1.7 Conversão de tipos**
+
+Coluna `rating` convertida de `STRING` para `FLOAT64` via `CAST`.
+
+---
+
+**1.8 Novas variáveis**
+
+Criadas `main_category` e `sub_category` a partir do split da coluna `category` pelo delimitador `|`.
+
+---
+
+**1.9 União das tabelas**
+
+Tabelas `amazon_product_clean` e `amazon_review_clean` unidas via `LEFT JOIN` em `product_id`. Duplicatas da união tratadas com `ROW_NUMBER() OVER (PARTITION BY product_id)`.
 
 ---
 
@@ -93,29 +155,31 @@ Duas tabelas foram importadas no BigQuery: `amazon_product` e `amazon_review`.
 
 **2.1 Correlação entre variáveis**
 
-![Correlação entre variáveis](https://github.com/user-attachments/assets/03ea0345-3734-4caf-a4d2-0de9882ddf77)
+| Par de variáveis | Correlação |
+|---|---|
+| actual_price × rating | fraca |
+| actual_price × rating_count | fraca |
+| discount_percentage × rating | fraca |
+| discount_percentage × rating_count | fraca |
+| rating × rating_count | fraca |
+
+---
 
 **2.2 Quintis e medidas de tendência central**
 
-![Quintil — rating](https://github.com/user-attachments/assets/84a4b270-1f3a-45a3-8258-18d1e294df20)
-![Quintil — rating_count](https://github.com/user-attachments/assets/4f1d3491-7db3-4f14-a4a2-c6588a972366)
-![Quintil — actual_price](https://github.com/user-attachments/assets/53269ae9-f95c-4adf-830a-36ab27ab25f2)
-![Quintil — discount_percentage](https://github.com/user-attachments/assets/9094f435-dff5-41b9-a7aa-27b123ad9e7f)
+Base dividida em 5 grupos (`NTILE(5)`) para as variáveis: `rating`, `rating_count`, `actual_price` e `discount_percentage`.
+
+---
 
 **2.3 Agrupamento por variáveis categóricas**
 
-![Rating e rating_count por categoria](https://github.com/user-attachments/assets/c1ec6c28-d3fc-4a88-8fb1-4c13df960a3c)
-![Rating e rating_count por subcategoria](https://github.com/user-attachments/assets/4464e280-bed7-4732-bc9f-950f44928ef1)
-![Rating e rating_count por produto](https://github.com/user-attachments/assets/71abd93d-68ec-4c08-856e-c8ac54c0f121)
-![Distribuição de nulos](https://github.com/user-attachments/assets/592613cb-a062-4f6e-8779-da5d0bc07b80)
-![Distribuição de nulos 2](https://github.com/user-attachments/assets/5e81d959-e239-4378-a619-8f6d82a7dcd8)
+Dados agrupados por `main_category`, `sub_category` e produto, analisando `rating` e `rating_count` em cada nível.
+
+---
 
 **2.4 Medidas de dispersão**
 
-![Dispersão 1](https://github.com/user-attachments/assets/599615fc-ca71-4d3d-a3ea-bb37f48f9e70)
-![Dispersão 2](https://github.com/user-attachments/assets/a9bd52fd-87ef-4b12-b6ce-ec45eac44149)
-![Dispersão 3](https://github.com/user-attachments/assets/6234b4d2-a0e7-4ab6-be06-1fc3c6eacfbc)
-![Dispersão 4](https://github.com/user-attachments/assets/a074c6b9-8991-46ae-bde5-aaaa6228cbe7)
+Desvio padrão e variância calculados para as principais variáveis numéricas.
 
 ---
 
@@ -123,24 +187,18 @@ Duas tabelas foram importadas no BigQuery: `amazon_product` e `amazon_review`.
 
 **3.1 Validação de hipóteses**
 
-![Hipótese 1](https://github.com/user-attachments/assets/14a1e7db-187d-4593-9ac1-f941efc564e1)
-![Hipótese 2](https://github.com/user-attachments/assets/b7208118-b78d-4f1a-9485-751b51ad70fc)
-![Hipótese 3](https://github.com/user-attachments/assets/09c105e2-eb5e-4d52-a929-d1e17b5d9ff0)
-![Hipótese 4](https://github.com/user-attachments/assets/3dac41bb-d31e-4249-9783-f95af7af0beb)
+Hipóteses validadas via análise de correlação, quintis e visualizações no Power BI.
 
-**3.2 Segmentação** — classificação das avaliações em faixas (`0-1`, `1-2` ... `4-5`) e cálculo do `average_quintile` por produto, combinando `rating`, `rating_count`, `actual_price` e `discount_percentage`.
+**3.2 Segmentação**
+
+- Criada coluna `rating_range` classificando avaliações em faixas: `0-1`, `1-2`, `2-3`, `3-4`, `4-5`
+- Criada coluna `average_quintile`: média arredondada dos quintis de `rating`, `rating_count`, `actual_price` e `discount_percentage` — representa o desempenho geral do produto
 
 ---
 
 ## Resultados
 
-![Dashboard](https://github.com/user-attachments/assets/e22a5cd4-f512-4cde-b3b0-72d459638a9a)
-
-**Tabela de resumo por categoria**
-
-![Resumo por categoria](https://github.com/user-attachments/assets/f84941be-259e-4d7a-a2ff-70b182c21744)
-
-Ranking de satisfação dos clientes por categoria:
+**Ranking de satisfação dos clientes por categoria:**
 
 | Posição | Categoria | Destaque |
 |---|---|---|
@@ -153,10 +211,24 @@ Ranking de satisfação dos clientes por categoria:
 
 ## Conclusões e Próximos Passos
 
-A análise viabiliza a construção de um modelo de desempenho de produto com base em rentabilidade, popularidade e satisfação. Para evoluir o modelo, recomenda-se incorporar:
+**Conclusão**
 
-- **Data e valor de venda** — identificar tendências de mercado
-- **Investimento do fornecedor** — calcular margem de lucro real
-- **Análise de sentimento (NLP)** — aprofundar a leitura de satisfação
+A implementação do modelo de análise permite que a Amazon e seus fornecedores de dropshipping tomem decisões mais assertivas sobre portfólio de produtos. A categoria **Eletrônicos**, apesar de ser a maior em volume, fica em 3º lugar em satisfação — indicando oportunidade de melhoria na curadoria de produtos.
 
-Com dados complementares, é possível desenvolver uma **Matriz BCG automatizada**, classificando produtos por participação de mercado e taxa de crescimento para orientar decisões estratégicas de portfólio.
+A **Matriz BCG** foi sugerida como ferramenta complementar para classificar produtos por participação de mercado e taxa de crescimento.
+
+**Próximos passos**
+
+Para evoluir o modelo, recomenda-se incorporar:
+
+| Variável | Contribuição |
+|---|---|
+| Data e valor de venda | Identificar tendências de mercado e sazonalidade |
+| Investimento do fornecedor | Calcular margem de lucro real |
+| Análise de sentimento (NLP) | Aprofundar leitura de satisfação a partir dos textos de review |
+
+Com esses dados, os três pilares da análise ganham maior precisão:
+
+1. **Rentabilidade** — preço de venda, descontos *e margem de lucro real*
+2. **Popularidade** — avaliações, classificação *e tendências de pesquisa ao longo do tempo*
+3. **Satisfação** — pontuação média *e análise de sentimento via NLP*
